@@ -9,6 +9,11 @@ WebServer server(80);
 // Boolean array to store if peripherals are connected
 bool peripheralConnected[sizeof(Peripherals) / sizeof(Peripherals[0])] = {false, false};
 
+// TO DO: make this less shit
+// Characteristics refernces
+BLECharacteristic lampCharacteristics[2]; // Lamp characteristics 1: write, 2: notify
+BLECharacteristic LEDCharacteristics[2];  // LED characteristics 1: write, 2: notify
+
 // Returns if a BLE scan is already happening
 bool isScanning = false;
 
@@ -39,6 +44,38 @@ void scanPeripheralIndex(int index)
       Serial.println(index);
       isScanning = true;
       BLE.scanForName(Peripherals[index]);
+    }
+  }
+}
+
+// Simple disconnect
+void dcPeripheral(BLEDevice peripheral, int index)
+{
+  peripheralConnected[index] = false;
+  Serial.print("[INFO] Disconnecting peripheral with index ");
+  Serial.println(index);
+  peripheral.disconnect();
+}
+
+// Check if connected peripheral has the required services and characteristics
+// TO DO: put the services to check in a variable or something like that
+bool checkAndSaveCharacteristics(BLEDevice peripheral, int index)
+{
+  switch (index)
+  {
+  case 0: // Lamp checks
+    if (peripheral.hasService("FFF0") && peripheral.service("FFF0").hasCharacteristic("FFF3") && peripheral.service("FFF0").hasCharacteristic("FFF4"))
+    {
+      lampCharacteristics[0] = peripheral.service("FFF0").characteristic("FFF3");
+      lampCharacteristics[1] = peripheral.service("FFF0").characteristic("FFF4");
+      return true;
+    }
+  case 1: // LEDs checks
+    if (peripheral.hasService("FFD5") && peripheral.service("FFD5").hasCharacteristic("FFD9") && peripheral.hasService("FFD0") && peripheral.service("FFD0").hasCharacteristic("FFD4"))
+    {
+      LEDCharacteristics[0] = peripheral.service("FFD5").characteristic("FFD9");
+      LEDCharacteristics[1] = peripheral.service("FFD0").characteristic("FFD4");
+      return true;
     }
   }
 }
@@ -98,45 +135,46 @@ void connectPeripheral(BLEDevice peripheral)
     // If attribute discovery fails, disconnect
     Serial.print("[WARN] BLE Attribute discovery failed on device with index ");
     Serial.println(peripheralIndex);
-    peripheralConnected[peripheralIndex] = false;
-    peripheral.disconnect();
+    dcPeripheral(peripheral, peripheralIndex);
     return;
   }
 
-  // if (peripheral.hasService("FFF0"))
-  // {
-  //   if (peripheral.service("FFF0").hasCharacteristic("FFF3"))
-  //   {
-  //     // lights ON
-  //     BLECharacteristic fff3 = peripheral.service("FFF0").characteristic("FFF3");
-  //     byte value[] = {0x55, 0x01, 0xff, 0x06, 0x00, 0xa4};
-  //     fff3.writeValue(value, sizeof(value), true);
-  //     // lights OFF
-  //     delay(1000);
-  //     byte value2[] = {0x55, 0x01, 0xff, 0x06, 0x01, 0xa3};
-  //     fff3.writeValue(value2, sizeof(value2), true);
-  //   }
-  //   else
-  //   {
-  //     // If important characteristic not found, disconnect
-  //     Serial.println("Important Lamp characteristic not found, disconnecting!");
-  //     peripheral.disconnect();
-  //     return;
-  //   }
-  // }
-  // else
-  // {
-  //   // If important service not found, disconnect
-  //   Serial.println("Important Lamp service not found, disconnecting!");
-  //   peripheral.disconnect();
-  //   return;
-  // }
+  // Check if all the needed services and attributes are present, also save them in the reference
+  if (!checkAndSaveCharacteristics(peripheral, peripheralIndex))
+  {
+    // If attribute discovery fails, disconnect
+    Serial.print("[WARN] BLE Peripheral with index ");
+    Serial.println(peripheralIndex);
+    Serial.print(" is missing important characteristics or services!");
+    dcPeripheral(peripheral, peripheralIndex);
+    return;
+  }
+  //test thingy boing: turn one lamp on, then off and the other one on
+  if (allPeriphsConnected){
+    byte lampOn[] = {0x55, 0x01, 0xff, 0x06, 0x01, 0xa3};
+    byte lampOff[] = {0x55, 0x01, 0xff, 0x06, 0x00, 0xa4};
+    byte LEDOn[] = {0xcc, 0x23, 0x33};
+    byte LEDOff[] = {0xcc, 0x24, 0x33};
+    lampCharacteristics[0].writeValue(lampOn, sizeof(lampOn));
+    delay(1000);
+    lampCharacteristics[0].writeValue(lampOff, sizeof(lampOff));
+    LEDCharacteristics[0].writeValue(LEDOn, sizeof(LEDOn));
+    delay(1000);
+    LEDCharacteristics[0].writeValue(LEDOff, sizeof(LEDOff));
+  }
 }
 
 void setup()
 {
   // Initialize Serial
   Serial.begin(115200);
+  // Begin WiFi
+  WiFi.setHostname("ESP32-BLE-Lamp-Controller");
+  WiFi.mode(WIFI_STA);
+  // Connect
+  Serial.print("Connecting to WiFi network ");
+  Serial.println(SSID);
+  WiFi.begin(SSID, Pass);
   // Initialize BLE
   BLE.begin();
   Serial.println("Beginning BLE Module");
