@@ -3,6 +3,7 @@
 #include <Credentials.h>
 #include <WebServer.h>
 #include <ArduinoBLE.h>
+#include <BLECommands.h>
 
 WebServer server(80);
 
@@ -17,7 +18,8 @@ BLECharacteristic LEDCharacteristics[2];  // LED characteristics 1: write, 2: no
 // Returns if a BLE scan is already happening
 bool isScanning = false;
 
-// Returns true if all peripherals are connected
+// Basic Control Functions
+//  Returns true if all peripherals are connected
 bool allPeriphsConnected()
 {
   for (bool connected : peripheralConnected)
@@ -57,6 +59,135 @@ void dcPeripheral(BLEDevice peripheral, int index)
   peripheral.disconnect();
 }
 
+// Specific light control functions
+// Turns the peripheral either on/off, returns true if successful
+bool peripheralOnOff(int index, bool on)
+{
+  // Check if peripheral is connected
+  if (peripheralConnected[index])
+  {
+    switch (index)
+    {
+    case 0:
+      if (on)
+      {
+        //.writeValue returns 1 upon success
+        if (lampCharacteristics[0].writeValue(lampOn, sizeof lampOn, true) == 1)
+        {
+          return true;
+        }
+        else
+        {
+          return false;
+        }
+      }
+      else
+      {
+        //.writeValue returns 1 upon success
+        if (lampCharacteristics[0].writeValue(lampOff, sizeof lampOff, true) == 1)
+        {
+          return true;
+        }
+        else
+        {
+          return false;
+        }
+      }
+    case 1:
+      if (on)
+      {
+        if (LEDCharacteristics[0].writeValue(LEDOn, sizeof LEDOn, true) == 1)
+        {
+          return true;
+        }
+        else
+        {
+          return false;
+        }
+      }
+      else
+      {
+        if (LEDCharacteristics[0].writeValue(LEDOff, sizeof LEDOff, true) == 1)
+        {
+          return true;
+        }
+        else
+        {
+          return false;
+        }
+      }
+    default:
+      return false;
+    }
+  }
+  else
+  {
+    return false;
+  }
+}
+
+// Set peripheral (lamp) color and brightness, returns true if successful
+bool LEDSetColor(int r, int g, int b)
+{
+  // Check if connected
+  if (peripheralConnected[1])
+  {
+    // Check if inputs are within allowed color range
+    if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+    {
+      byte value[7] = {0x56, r, g, b, 0x01, 0xf0, 0xaa}; // bytes 2, 3 and 4 represent the color
+      //.writeValue returns 1 upon success
+      if (LEDCharacteristics[0].writeValue(value, sizeof value, true) == 1)
+      {
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+    else
+    {
+      return false;
+    }
+  }
+  else
+  {
+    return false;
+  }
+}
+
+// Set peripheral (lamp) color and brightness, returns true if successful
+bool LampSetBrightness(int brightness)
+{
+  // Check if connected
+  if (peripheralConnected[0])
+  {
+    // Check if inputs are within allowed color range
+    if (brightness >= 0 && brightness <= 25700)
+    {
+      byte value[6] = {0x55, 0x05, 0xff, 0x06, highByte(brightness),lowByte(brightness)};
+      if (lampCharacteristics[0].writeValue(value, sizeof value, true) == 1)
+      {
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+    else
+    {
+      return false;
+    }
+  }
+  else
+  {
+    return false;
+  }
+}
+
+// Connect Functions
 // Check if connected peripheral has the required services and characteristics
 // TO DO: put the services to check in a variable or something like that
 bool checkAndSaveCharacteristics(BLEDevice peripheral, int index)
@@ -77,6 +208,8 @@ bool checkAndSaveCharacteristics(BLEDevice peripheral, int index)
       LEDCharacteristics[1] = peripheral.service("FFD0").characteristic("FFD4");
       return true;
     }
+  default:
+    return false;
   }
 }
 
@@ -110,9 +243,8 @@ void connectPeripheral(BLEDevice peripheral)
   // Attempt connecting
   if (peripheral.connect())
   {
-    Serial.print("[INFO] Successfully connected to peripheral with index ");
+    Serial.print("[INFO] Connecting to peripheral with index ");
     Serial.println(peripheralIndex);
-    peripheralConnected[peripheralIndex] = true;
   }
   else
   {
@@ -149,19 +281,20 @@ void connectPeripheral(BLEDevice peripheral)
     dcPeripheral(peripheral, peripheralIndex);
     return;
   }
-  //test thingy boing: turn one lamp on, then off and the other one on
-  if (allPeriphsConnected){
-    byte lampOn[] = {0x55, 0x01, 0xff, 0x06, 0x01, 0xa3};
-    byte lampOff[] = {0x55, 0x01, 0xff, 0x06, 0x00, 0xa4};
-    byte LEDOn[] = {0xcc, 0x23, 0x33};
-    byte LEDOff[] = {0xcc, 0x24, 0x33};
-    lampCharacteristics[0].writeValue(lampOn, sizeof(lampOn));
-    delay(1000);
-    lampCharacteristics[0].writeValue(lampOff, sizeof(lampOff));
-    LEDCharacteristics[0].writeValue(LEDOn, sizeof(LEDOn));
-    delay(1000);
-    LEDCharacteristics[0].writeValue(LEDOff, sizeof(LEDOff));
-  }
+  Serial.print("[INFO] Successfully connected to peripheral with index ");
+  Serial.println(peripheralIndex);
+  peripheralConnected[peripheralIndex] = true;
+  delay(1500);
+  peripheralOnOff(0, true);
+  LampSetBrightness(25700);
+  delay(1000);
+  LampSetBrightness(10000);
+  delay(1000);
+  LampSetBrightness(5000);
+  delay(1000);
+  LampSetBrightness(1000);
+  delay(1000);
+  LampSetBrightness(0);
 }
 
 void setup()
