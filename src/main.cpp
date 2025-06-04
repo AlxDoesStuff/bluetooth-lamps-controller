@@ -126,7 +126,7 @@ bool peripheralOnOff(int index, bool on)
   }
 }
 
-// Set peripheral (lamp) color and brightness, returns true if successful
+// Set peripheral (LED) color and brightness, returns true if successful
 bool LEDSetColor(int r, int g, int b)
 {
   // Check if connected
@@ -157,7 +157,7 @@ bool LEDSetColor(int r, int g, int b)
   }
 }
 
-// Set peripheral (lamp) color and brightness, returns true if successful
+// Set peripheral (lamp) brightness, returns true if successful
 bool LampSetBrightness(int brightness)
 {
   // Check if connected
@@ -166,7 +166,57 @@ bool LampSetBrightness(int brightness)
     // Check if inputs are within allowed color range
     if (brightness >= 0 && brightness <= 25700)
     {
-      byte value[6] = {0x55, 0x05, 0xff, 0x06, highByte(brightness),lowByte(brightness)};
+      byte value[6] = {0x55, 0x05, 0xff, 0x06, highByte(brightness), lowByte(brightness)};
+      if (lampCharacteristics[0].writeValue(value, sizeof value, true) == 1)
+      {
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+    else
+    {
+      return false;
+    }
+  }
+  else
+  {
+    return false;
+  }
+}
+
+// Set peripheral (lamp) color, returns true if successful
+bool LampSetColor(int r, int g, int b)
+{
+  // Check if connected
+  if (peripheralConnected[1])
+  {
+    // Check if inputs are within allowed color range
+    if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+    {
+      // Goofy final byte shit. Idfk who came up with this on the other end, but I don't like it
+      int finalByte = 160;
+      if (r > 0)
+      {
+        finalByte++;
+      }
+      if (g > 0)
+      {
+        finalByte++;
+      }
+      if (b > 0)
+      {
+        finalByte++;
+      }
+      if (r == 0, b == 0, g == 0)
+      {
+        finalByte = 161;
+      }
+
+      byte value[8] = {0x55, 0x03, 0xff, 0x08, r, g, b, finalByte}; // bytes 5, 6 and 7 represent the color
+
       if (lampCharacteristics[0].writeValue(value, sizeof value, true) == 1)
       {
         return true;
@@ -287,14 +337,7 @@ void connectPeripheral(BLEDevice peripheral)
   delay(1500);
   peripheralOnOff(0, true);
   LampSetBrightness(25700);
-  delay(1000);
-  LampSetBrightness(10000);
-  delay(1000);
-  LampSetBrightness(5000);
-  delay(1000);
-  LampSetBrightness(1000);
-  delay(1000);
-  LampSetBrightness(0);
+  LampSetColor(255, 255, 255);
 }
 
 void setup()
@@ -311,6 +354,32 @@ void setup()
   // Initialize BLE
   BLE.begin();
   Serial.println("Beginning BLE Module");
+  // Start HTTP server
+  server.begin();
+
+  //HTTP Request structure: URL/?targetPeripheral=(peripheral Index)&on=(value)&brightness=(value)&r=(value)&green=(value)&blue=(value)
+  //All values except targetPeripheral can be set to NULL to not be changed, but must be included in the request.
+
+  // HTTP handling
+  server.on("/", HTTP_POST, []()
+            {
+    //Check if all needed arguments are present
+    if(server.hasArg("targetPeripheralIndex") && server.hasArg("brightness" )&& server.hasArg("on")  && server.hasArg("red") && server.hasArg("green") && server.hasArg("blue")){
+      bool tValidIndex = false; //temperorary storage for if the index is valid
+      //Check if target Peripheral arg is one of the peripherals
+      for (int i = 0; i < sizeof(Peripherals) / sizeof(Peripherals[0]); i++){
+        if (server.arg("targetPeripheralIndex").toInt() == i){ 
+          tValidIndex = true; 
+        }
+      }
+      if (!tValidIndex){ 
+        server.send(400);
+      }else{
+        //If a valid peripheral inde  
+      }
+    }else{
+      server.send(400); //If needed arguments missing, send bad request 
+    } });
 }
 
 void loop()
