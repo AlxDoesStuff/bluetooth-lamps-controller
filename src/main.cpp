@@ -340,6 +340,45 @@ void connectPeripheral(BLEDevice peripheral)
   LampSetColor(255, 255, 255);
 }
 
+// Handles http requests with below arguments, returns HTTP response as int
+int handleHTTP(String targetPeripheralIndex, String brightnessArg, String onArg, String redArg, String greenArg, String blueArg)
+{
+  bool tValidIndex = false; // temperorary storage for if the index is valid
+  // Check if target Peripheral arg is one of the peripherals
+  for (int i = 0; i < sizeof(Peripherals) / sizeof(Peripherals[0]); i++)
+  {
+    if (server.arg("targetPeripheralIndex").toInt() == i)
+    {
+      tValidIndex = true;
+    }
+  }
+  if (!tValidIndex)
+  {
+    return 400; // Bad Request
+  }
+  else
+  {
+    // All args should be integers
+    int periphIndex = targetPeripheralIndex.toInt();
+    int brightness = brightnessArg.toInt();
+    int on = brightnessArg.toInt();
+    int red = redArg.toInt();
+    int green = greenArg.toInt();
+    int blue = blueArg.toInt();
+    switch (periphIndex)
+    {
+    case 0:
+      Serial.println("Tried to access peripheral 0 per http");
+      return 200;
+    case 1:
+      Serial.println("Tried to access peripheral 1 per http");
+      return 200;
+    default:
+      return 400;
+    }
+  }
+}
+
 void setup()
 {
   // Initialize Serial
@@ -348,38 +387,33 @@ void setup()
   WiFi.setHostname("ESP32-BLE-Lamp-Controller");
   WiFi.mode(WIFI_STA);
   // Connect
-  Serial.print("Connecting to WiFi network ");
+  Serial.print("[INFO] Connecting to WiFi network: ");
   Serial.println(SSID);
   WiFi.begin(SSID, Pass);
+  while (!WiFi.isConnected())
+  {
+    delay(10); //Wait until WiFi is on
+  };
+  Serial.print("[INFO] Successfully connected to WiFi. Local IP: ");
+  Serial.println(WiFi.localIP().toString());
   // Initialize BLE
   BLE.begin();
-  Serial.println("Beginning BLE Module");
+  Serial.println("[INFO] Beginning BLE Module");
   // Start HTTP server
   server.begin();
-
-  //HTTP Request structure: URL/?targetPeripheral=(peripheral Index)&on=(value)&brightness=(value)&r=(value)&green=(value)&blue=(value)
-  //All values except targetPeripheral can be set to NULL to not be changed, but must be included in the request.
+  Serial.println("Starting HTTP Server");
+  // HTTP Request structure: URL/controlDevice?targetPeripheral=(peripheral Index)&on=(value)&brightness=(value)&r=(value)&green=(value)&blue=(value)
+  // All values except targetPeripheral can be set to NULL to not be changed, but must be included in the request.
 
   // HTTP handling
-  server.on("/", HTTP_POST, []()
+  server.on("/controlDevice", HTTP_POST, []()
             {
     //Check if all needed arguments are present
     if(server.hasArg("targetPeripheralIndex") && server.hasArg("brightness" )&& server.hasArg("on")  && server.hasArg("red") && server.hasArg("green") && server.hasArg("blue")){
-      bool tValidIndex = false; //temperorary storage for if the index is valid
-      //Check if target Peripheral arg is one of the peripherals
-      for (int i = 0; i < sizeof(Peripherals) / sizeof(Peripherals[0]); i++){
-        if (server.arg("targetPeripheralIndex").toInt() == i){ 
-          tValidIndex = true; 
-        }
-      }
-      if (!tValidIndex){ 
-        server.send(400);
-      }else{
-        //If a valid peripheral inde  
-      }
+      server.send(handleHTTP(server.arg("targetPeripheralIndex"), server.arg("brightness"), server.arg("on"), server.arg("red"), server.arg("green"), server.arg("blue")));
     }else{
       server.send(400); //If needed arguments missing, send bad request 
-    } });
+    } });  
 }
 
 void loop()
