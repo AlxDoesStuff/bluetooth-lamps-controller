@@ -10,6 +10,19 @@ WebServer server(80);
 // Boolean array to store if peripherals are connected
 bool peripheralConnected[sizeof(Peripherals) / sizeof(Peripherals[0])] = {false, false};
 
+//Variables to store current values of peripheral settings
+//LEDs
+int LEDOnCurrent = 0;
+int LEDRCurrent = 0;
+int LEDGCurrent = 0;
+int LEDBCurrent = 0;
+//Lamp
+int lampOnCurrent = 0;
+int lampRCurrent = 0;
+int lampGCurrent = 0;
+int lampBCurrent = 0;
+int lampBrightnessCurrent = 0;
+
 // TO DO: make this less shit
 // Characteristics refernces
 BLECharacteristic lampCharacteristics[2]; // Lamp characteristics 1: write, 2: notify
@@ -74,6 +87,7 @@ bool peripheralOnOff(int index, bool on)
         //.writeValue returns 1 upon success
         if (lampCharacteristics[0].writeValue(lampOn, sizeof lampOn, true) == 1)
         {
+          lampOnCurrent = 1;
           return true;
         }
         else
@@ -86,6 +100,7 @@ bool peripheralOnOff(int index, bool on)
         //.writeValue returns 1 upon success
         if (lampCharacteristics[0].writeValue(lampOff, sizeof lampOff, true) == 1)
         {
+          lampOnCurrent = 0;
           return true;
         }
         else
@@ -98,10 +113,12 @@ bool peripheralOnOff(int index, bool on)
       {
         if (LEDCharacteristics[0].writeValue(LEDOn, sizeof LEDOn, true) == 1)
         {
+          LEDOnCurrent = 1;
           return true;
         }
         else
         {
+          LEDOnCurrent = 0;
           return false;
         }
       }
@@ -139,6 +156,9 @@ bool LEDSetColor(int r, int g, int b)
       //.writeValue returns 1 upon success
       if (LEDCharacteristics[0].writeValue(value, sizeof value, true) == 1)
       {
+        LEDRCurrent = r;
+        LEDGCurrent = g;
+        LEDBCurrent = b;
         return true;
       }
       else
@@ -169,6 +189,7 @@ bool LampSetBrightness(int brightness)
       byte value[6] = {0x55, 0x05, 0xff, 0x06, highByte(brightness), lowByte(brightness)};
       if (lampCharacteristics[0].writeValue(value, sizeof value, true) == 1)
       {
+        lampBrightnessCurrent = brightness;
         return true;
       }
       else
@@ -219,6 +240,9 @@ bool LampSetColor(int r, int g, int b)
 
       if (lampCharacteristics[0].writeValue(value, sizeof value, true) == 1)
       {
+        lampRCurrent = r;
+        lampGCurrent = g;
+        lampBCurrent = b;
         return true;
       }
       else
@@ -430,7 +454,7 @@ int LEDPeripheralHTTP(int on, int r, int g, int b){
 }
 
 // Handles http requests with below arguments, returns HTTP response as int
-int handleHTTP(String targetPeripheralIndex, String brightnessArg, String onArg, String redArg, String greenArg, String blueArg)
+int handleSetHTTP(String targetPeripheralIndex, String brightnessArg, String onArg, String redArg, String greenArg, String blueArg)
 {
   bool tValidIndex = false; // temperorary storage for if the index is valid
   // Check if target Peripheral arg is one of the peripherals
@@ -466,6 +490,14 @@ int handleHTTP(String targetPeripheralIndex, String brightnessArg, String onArg,
   }
 }
 
+//Gets the current settings of the perihperals as a CSV string
+String getPeriphValuesAsCSV(){
+  String table = "LED On, LED R, LED G, LED B, Lamp On, Lamp R, Lamp G, Lamp B\n";
+  String seperator = ", ";
+  String csv = table + LEDOnCurrent + seperator + LEDRCurrent +  seperator + LEDGCurrent + seperator + LEDBCurrent + seperator +  + lampOnCurrent + seperator + lampRCurrent  + seperator +  lampGCurrent  + seperator +  lampBCurrent;  //Very cursed
+  return csv;
+}
+
 void setup()
 {
   // Initialize Serial
@@ -497,10 +529,14 @@ void setup()
             {
     //Check if all needed arguments are present
     if(server.hasArg("targetPeripheralIndex") && server.hasArg("brightness" )&& server.hasArg("on")  && server.hasArg("red") && server.hasArg("green") && server.hasArg("blue")){
-      server.send(handleHTTP(server.arg("targetPeripheralIndex"), server.arg("brightness"), server.arg("on"), server.arg("red"), server.arg("green"), server.arg("blue")));
+      server.send(handleSetHTTP(server.arg("targetPeripheralIndex"), server.arg("brightness"), server.arg("on"), server.arg("red"), server.arg("green"), server.arg("blue")));
     }else{
       server.send(400); //If needed arguments missing, send bad request 
     } });
+
+  server.on("/getPeripheralValues", HTTP_GET, [](){
+    server.send(200, "text/csv",getPeriphValuesAsCSV());
+  });
 }
 
 void loop()
