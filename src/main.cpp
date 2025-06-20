@@ -340,6 +340,95 @@ void connectPeripheral(BLEDevice peripheral)
   LampSetColor(255, 255, 255);
 }
 
+// Handles http control for the lamp peripheral, returns HTTP response as int
+int lampPeripheralHTTP(int brightness, int on, int r, int g, int b)
+{
+  bool noSuccess = true; // Variable to track if at least one of the functions succeeded
+  // Attempt setting brightness
+  if (brightness != -1)
+  {
+    if (LampSetBrightness(brightness))
+    {
+      noSuccess = false;
+    }
+  }
+  // Attempt setting on/off
+  if (on != -1)
+  {
+    if (on == 0)
+    {
+      if (peripheralOnOff(0, false))
+      {
+        noSuccess = false;
+      }
+    }
+    else if (on == 1)
+    {
+      if (peripheralOnOff(0, true))
+      {
+        noSuccess = false;
+      }
+    }
+  }
+  // Attempt setting rgb
+  if (r != -1 && g != -1 && b != -1)
+  {
+    if (LampSetColor(r, g, b))
+    {
+      noSuccess = false;
+    }
+  }
+  // If success, return OK, otherwise bad request
+  if (noSuccess)
+  {
+    return 400;
+  }
+  else
+  {
+    return 200;
+  }
+}
+
+//Handle http control for the LED peripheral, returns HTTP repsonse as int
+int LEDPeripheralHTTP(int on, int r, int g, int b){
+   bool noSuccess = true; // Variable to track if at least one of the functions succeeded
+  // Attempt setting on/off
+  if (on != -1)
+  {
+    if (on == 0)
+    {
+      if (peripheralOnOff(1, false))
+      {
+        noSuccess = false;
+      }
+    }
+    else if (on == 1)
+    {
+      if (peripheralOnOff(1, true))
+      {
+        noSuccess = false;
+      }
+    }
+  }
+  // Attempt setting rgb
+  if (r != -1 && g != -1 && b != -1)
+  {
+    if (LEDSetColor(r, g, b))
+    {
+      noSuccess = false;
+    }
+  }
+  // If success, return OK, otherwise bad request
+  if (noSuccess)
+  {
+    return 400;
+  }
+  else
+  {
+    return 200;
+  }
+}
+
 // Handles http requests with below arguments, returns HTTP response as int
 int handleHTTP(String targetPeripheralIndex, String brightnessArg, String onArg, String redArg, String greenArg, String blueArg)
 {
@@ -361,18 +450,16 @@ int handleHTTP(String targetPeripheralIndex, String brightnessArg, String onArg,
     // All args should be integers
     int periphIndex = targetPeripheralIndex.toInt();
     int brightness = brightnessArg.toInt();
-    int on = brightnessArg.toInt();
+    int on = onArg.toInt();
     int red = redArg.toInt();
     int green = greenArg.toInt();
     int blue = blueArg.toInt();
     switch (periphIndex)
     {
     case 0:
-      Serial.println("Tried to access peripheral 0 per http");
-      return 200;
+      return lampPeripheralHTTP(brightness, on, red, green, blue);
     case 1:
-      Serial.println("Tried to access peripheral 1 per http");
-      return 200;
+      return LEDPeripheralHTTP(on,red,green,blue);
     default:
       return 400;
     }
@@ -392,7 +479,7 @@ void setup()
   WiFi.begin(SSID, Pass);
   while (!WiFi.isConnected())
   {
-    delay(10); //Wait until WiFi is on
+    delay(10); // Wait until WiFi is on
   };
   Serial.print("[INFO] Successfully connected to WiFi. Local IP: ");
   Serial.println(WiFi.localIP().toString());
@@ -413,7 +500,7 @@ void setup()
       server.send(handleHTTP(server.arg("targetPeripheralIndex"), server.arg("brightness"), server.arg("on"), server.arg("red"), server.arg("green"), server.arg("blue")));
     }else{
       server.send(400); //If needed arguments missing, send bad request 
-    } });  
+    } });
 }
 
 void loop()
@@ -447,4 +534,19 @@ void loop()
       }
     }
   }
+  // Check if WiFi is still connected
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("WiFi not connected!");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    // Wait for reconnection
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      Serial.println("Connecting...");
+      delay(100);
+    }
+  }
+  server.handleClient();
+  delay(100); // update tick
 }
