@@ -523,7 +523,6 @@ void setup()
   Serial.println("Starting HTTP Server");
   // HTTP Request structure: URL/controlDevice?targetPeripheral=(peripheral Index)&on=(value)&brightness=(value)&r=(value)&green=(value)&blue=(value)
   // All values except targetPeripheral can be set to NULL to not be changed, but must be included in the request.
-
   // HTTP handling
   server.on("/controlDevice", HTTP_POST, []()
             {
